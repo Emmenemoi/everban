@@ -1,4 +1,3 @@
-
 /*!
  * jQuery EVERBAN Module history
 
