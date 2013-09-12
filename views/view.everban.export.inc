@@ -1,7 +1,7 @@
 <?php
 
 $view = new view;
-$view->name = 'Everban';
+$view->name = 'everban';
 $view->description = 'Everban List';
 $view->tag = 'everban';
 $view->base_table = 'users';
@@ -624,13 +624,13 @@ $handler->override_option('style_options', array(
   ),
   'default' => 'uid',
 ));
-$handler->override_option('path', 'everban');
+$handler->override_option('path', 'admin/user/everban');
 $handler->override_option('menu', array(
   'type' => 'normal',
   'title' => 'Everban View',
   'description' => 'Everban View',
   'weight' => '0',
-  'name' => 'primary-links',
+  'name' => 'navigation',
 ));
 $handler->override_option('tab_options', array(
   'type' => 'none',

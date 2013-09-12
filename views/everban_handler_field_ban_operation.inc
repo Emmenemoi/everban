@@ -2,7 +2,7 @@
 
 class everban_handler_field_ban_operation extends views_handler_field_numeric {
 
-    function init( &$view, &$options )  {
+    function init( &$view, $options )  {
         parent::init($view, $options);
         $this->additional_fields['pepper'] = 'pepper';
         $this->additional_fields['status'] = 'status';

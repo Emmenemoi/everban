@@ -179,7 +179,7 @@ function everban_check_for_trap( $user = null )
     }
 
     // BAN ALGORITHM
-	if ( in_array( $_SERVER['REMOTE_ADDR'], $cache['ips'] ) ) { 	if(DEBUG) { dpm($cache, $name = '$cache'); dpm(array_values( $cache['u']), $name = 'array_values( $cache[u])');} //dsm(array_values( $cache['u']));
+	if ( is_array($cache['ips']) && in_array( $_SERVER['REMOTE_ADDR'], $cache['ips'] ) ) { 	if(DEBUG) { dpm($cache, $name = '$cache'); dpm(array_values( $cache['u']), $name = 'array_values( $cache[u])');} //dsm(array_values( $cache['u']));
 		$banned = EVB_PEPPER_BANNED;
 	}
 
