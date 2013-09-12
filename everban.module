@@ -1,0 +1,516 @@
+<?php
+
+/* v6.0
+*
+* Handles "peppers" (strong random cookies) using JavaScript 
+* and "trap" (by IP or UID) mecanisms to prevent from undesirable. 
+*
+* Clients identified as baned will be redirected to banpage
+*
+* Need of Views 2 : implements administration interface
+*
+* Copyright 2013, Sebastien Fuchs, Alexandre Mourousy
+* Emmene-moi SARL // http://www.emmene-moi.fr
+*
+* JS Inspired by Samy Kamkar evercookie's works
+*
+* */
+
+define('EVB_PEPPER_SANE',	0);
+define('EVB_PEPPER_BANNED',	1);
+define('EVB_PEPPER_TRAPPED',2);
+define('EVB_BAN_OPERATION', 0);
+define('EVB_TRAP_TYPE_IP', 	1); // ! Constant used in everban.views.inc
+define('EVB_TRAP_TYPE_UID', 2); // ! Constant used in everban.views.inc
+define('EVB_TRAP_SLEEP',	0);
+define('EVB_TRAP_ACTIVE',	1);
+
+define('DEBUG', 		false);
+define('JS_DEBUG', 		false);
+define('DEBUG_CACHE', 	false); 
+
+
+/* 	TODO : check _everban_id() pour fonctionnement extension cache APC
+	Note : JS makes cookie 'EVP' from everPNG client caching
+*/
+
+/*******************************************************************************************************************
+ * IMPLEMENTS HOOK_INIT
+ */
+function everban_init() { 
+
+    /* AJAX check  */
+    if(!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+      return;
+    }
+
+    global $cookie_domain;
+    global $user;	
+	
+	// DEFINE COOKIE PEPPER
+    $pepper_cookie_name = _everban_id(); // ( 'EVB_' . cookie_domain ) 
+    $pepper = $_COOKIE[ $pepper_cookie_name ]; //dpm($pepper_cookie_name); 
+	// LAUNCH TRAP ALGORITHM (not for admin)
+    if( $user->uid!=1 ) everban_check_for_trap();								if(DEBUG) { dpm($pepper, $name = 'Cookie EVB'); dpm($banned, $name = '$ banned'); dpm($user->uid, $name = '$user->uid');}
+	// TEST COOKIE CONSISTANCY
+	$noPepper = empty($pepper) || strlen($pepper) != 32 || strpos($pepper, 'doctype') || preg_match('/\W/', $pepper);
+
+	// NO PEPPER COOKIE
+	if ( $noPepper ){
+		// [Id = 0/1] ( anonymous/admin ) : don't guess pepper
+		// [Id 'unknown'] : new random pepper / [Id 'known'] : take database pepper
+        $pepper = ( $user->uid>1 ) ? everban_get_user_pepper($user->uid) : '';	if(DEBUG) { dpm("INIT PEPPER : database or random.", $name = NULL ); dpm($pepper, $name = '$pepper');}
+		// FIND FOR LOCAL PEPPER OR RE-AFFECT PEPPER, WITH JAVASCRIPT
+		everban_add_javascript( $pepper_cookie_name, $pepper );
+     
+	// PEPPER COOKIE EXISTS
+	}else{
+ 		// CHECK STATUS OR INSERT PEPPER IN DB
+        $banned = everban_check_for_ban( $pepper );								if(DEBUG) dpm('PRESENCE PEPPER COOKIE NATUREL => PAS DE JAVASCRIPT', $name = NULL);
+	    // REFUSE ACCESS IF BANNED
+		if ( $banned == EVB_PEPPER_BANNED ) everban_goto_banpage(); 			else if(DEBUG) dpm("Pepper présent et utilisateur NOT BANNED", $name = NULL );
+    }
+}
+
+/********************************************************************************************************************
+ * Load Javascript plugin : FIND OR RE-AFFECT PEPPERS ON CLIENT
+ */
+function everban_add_javascript($pepper_cookie_name, $pepper )
+{
+	global $base_url;
+	$path = drupal_get_path('module', 'everban');
+	drupal_add_js( 	array( 'everban' => array('id' =>    	$pepper_cookie_name, 
+											 'pepper'=> 	$pepper, 
+											 'base_path'=>  base_path().$path.'/', 	 	// for PNG Canvas loading
+											 'base_url' =>	$base_url.'/'.$path.'/',	// for SwfStore init
+											 'js_debug' => 	JS_DEBUG)
+					), 
+					'setting'
+	);
+	drupal_add_js($path.'/jquery.everpng.js',		'module'); // PNG generation with forced cache and html5 canvas pixel reading
+	drupal_add_js($path.'/swfstore.js',				'module'); // Library for flash cookies
+	drupal_add_js($path.'/jquery.swfstore.js',		'module'); // Local Share Object - Flash storage
+	drupal_add_js($path.'/jquery.windowapi.js',		'module'); // Window.name Caching
+	drupal_add_js($path.'/jquery.cookie.js',		'module'); // Cookies API (need for storageapi)
+	drupal_add_js($path.'/jquery.storageapi.js', 	'module'); // Local and Session storage
+	drupal_add_js($path.'/jquery.everban.5.js', 	'module'); // API INTERFACE : jQuery plugin
+	drupal_add_js($path.'/everban.5.js', 			'module'); // MAIN ALGORITHM
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////            INITIALISATION LIBRARY           ////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+/***********************************************************************************************
+*  BAN CHECK  -> Returns 1 if UID is banned, 0 if not banned
+*/
+function everban_check_for_ban( $pepper, $user = null ) {
+    global $cookie_domain;
+    if ($user === null ) global $user;
+
+    $banned = -1;
+    $uids = array();
+
+	// CHECK IN CACHE
+    if( extension_loaded('apc') && ($cache = apc_fetch( _everban_id().'_'.$pepper)) && !empty($cache) ) 
+	{
+        if ( in_array($user->uid, $cache['u'] ) ) {					//dsm(array_values( $cache['u']));
+            return $cache['b'];
+        }
+    }
+	
+	// SEARCH PEPPER IN DB AND RELATED UID
+    $result = db_query("select status, GROUP_CONCAT(uid) as uids from {everban} where pepper = '%s' GROUP BY status ORDER BY status DESC LIMIT 1", $pepper);
+    while ($data = db_fetch_object($result)) {
+	    $banned = ( $data->status > EVB_PEPPER_SANE ) ? EVB_PEPPER_BANNED : EVB_PEPPER_SANE;
+        $uids = explode(',', $data->uids );
+    }
+
+    // IF PEPPER NOT YET REGISTERED OR PEPPER NOT ATTACHED TO THIS USER, AND USER NOT ANONYMOUS
+    if ( ($banned == -1 || !in_array($user->uid, $uids ) ) && $user->uid > 0) {
+        db_query("INSERT INTO {everban} (uid, pepper, status) VALUES (%d, '%s', %d)", $user->uid, $pepper, max(EVB_PEPPER_SANE, $banned));
+    }
+
+    $banned = max( EVB_PEPPER_SANE, $banned );
+    
+	// INSERT IN CACHE
+    if (extension_loaded('apc') ) {
+        apc_store( _everban_id().'_'.$pepper , array('b'=>$banned, 'u'=>$uids), 600);
+    }
+
+	return $banned;
+}
+
+/***********************************************************************************************
+*   CHECK TRAP
+*/
+function everban_check_for_trap( $user = null ) 
+{
+   if ($user === null ) {
+      global $user;
+   }
+   
+   $cache = array('ips'=>array(), 'uids'=>array());
+   $banned = EVB_PEPPER_SANE ; // Default value (not banned)
+    
+    // GESTION DU CACHE
+   if ( !extension_loaded('apc') || !( ($cache = apc_fetch( _everban_id().'_traps')) && !empty($cache) ) ) 
+   {
+       $get_multiples = db_query("SELECT * FROM {everban_traps} WHERE status=1;");
+       if ($get_multiples) {
+          while ($row = db_fetch_array($get_multiples)) {
+             switch($row['type']) {
+                case EVB_TRAP_TYPE_IP:
+                   $cache['ips'][] = $row['trap'];
+				   break;
+                case EVB_TRAP_TYPE_UID:
+                   $cache['uids'][] = $row['trap'];
+                   break;
+             }
+          }
+       }
+
+       if (extension_loaded('apc') ) {
+          apc_store( _everban_id().'_traps' , $cache, 86400);
+       }															if(DEBUG_CACHE) dpm($cache, 'mise en cache' );
+    }
+
+    // BAN ALGORITHM
+	if ( in_array( $_SERVER['REMOTE_ADDR'], $cache['ips'] ) ) { 	if(DEBUG) { dpm($cache, $name = '$cache'); dpm(array_values( $cache['u']), $name = 'array_values( $cache[u])');} //dsm(array_values( $cache['u']));
+		$banned = EVB_PEPPER_BANNED;
+	}
+
+	if ( $user->uid>1 && in_array( $user->uid, $cache['uids'] ) ) { //dsm(array_values( $cache['u']));
+		$banned = EVB_PEPPER_BANNED;
+	}
+
+	// ban this pepper    
+	if ( $banned==EVB_PEPPER_BANNED ) 
+	{
+		$pepper_cookie_name = _everban_id();
+		$pepper = $_COOKIE[$pepper_cookie_name];
+		if( !empty($pepper) )
+			everban_update_pepper_status( $pepper, EVB_PEPPER_TRAPPED );  
+		// go to banpage
+		everban_goto_banpage();
+	}
+
+	return $banned;
+
+}
+/***********************************************************************************************/
+function everban_goto_banpage() {
+    $jumpto = variable_get('everban_dest', 'everban/banned' );
+     if ( $_SERVER['REDIRECT_URL'] != $jumpto && drupal_get_path_alias(check_plain($_GET['q'])) != $jumpto) {
+        $msg = 'YOU ARE BANNED.';
+        drupal_set_message( $msg );
+        drupal_goto( $jumpto );
+     }
+}
+/***********************************************************************************************/
+function everban_get_user_pepper($uid, $real=false){
+    $result = db_query("select pepper from {everban} where uid = '%d' LIMIT 1", $uid);
+	while ($data = db_fetch_object($result)) {
+		$pepper = $data->pepper;
+	}    
+    return !isset($pepper) && !$real ? _everban_rand_string(32) : $pepper ;
+}
+/***********************************************************************************************/
+function everban_banned_page() {
+    echo "<body style='width:100%;height:100%;background-color:red;'><div style='position:absolute;width:50%; height:200px;margin-left:-25%;margin-top:-100px;top:50%;left:50%;color:white;text-align:center;font-size:2em;'>";
+    echo t("You have been banned for leagal reasons.<br> Please contact !email if you think there is a mistake.", array('!email'=>'support@'.$_SERVER['SERVER_NAME']));
+    echo "</div></body>";
+    exit;
+}
+/***********************************************************************************************/
+function _everban_rand_string(
+        $length, 
+        $skip_charset = '', 
+        $base_charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789')
+{
+  $skip_len = strlen($skip_charset);
+  for ($i = 0; $i<$skip_len; $i++){
+    $base_charset = str_replace($skip_charset[$i], '', $base_charset);
+  }
+  //cvar_dump($base_charset, '$base_charset after replace');
+  $str = '';
+  $count = strlen($base_charset);
+  while ($length--) {
+    $str .= $base_charset[mt_rand(0, $count - 1)];
+  }
+  return $str;
+}
+/***********************************************************************************************/
+function _everban_id() {
+    global $cookie_domain;
+	return str_replace('.','_','EVB'.$cookie_domain);
+	//return variable_get( 'everban_id', str_replace('.','_','EVB'.$cookie_domain) );
+	//return variable_get( 'everban_id', 'EVB' );
+}
+///////////////////////////////  OLD but...	//////////////////////////////////////////////////
+/**
+ * Implements hook_settings()
+
+function everban_settings() {
+	$form = array();
+	$form['everban_dest'] = array(
+		'#prefix' => t('Enter a destination for miscreants. If using a remote address, the full URL (including http://) must be used.	For a local page, use the Drupal path beginning with a slash.'),
+		'#type' => 'textfield',
+		'#title' => t('Redirect Destination'),
+		'#default_value' => variable_get('everban_dest', 'everban/banned'),
+		'#size' => '60',
+	);
+
+	$form['everban_id'] = array(
+		'#prefix' => t('Enter an id for the armored cookie.'),
+		'#type' => 'textfield',
+		'#title' => t('Armored cookie ID'),
+		'#default_value' => _everban_id(),
+		'#size' => '60',
+	);
+
+	return system_settings_form($form);
+}
+ */
+
+
+/** ************************************************************************************* **/
+/** **************************       EVERBAN DB ADMIN           ************************* **/
+/** ************************************************************************************* **/
+
+
+/**
+ * Implements hook_menu()
+ */
+function everban_menu() {
+	$items = array();
+	// BAN PAGE
+	$items['everban/banned'] = array(
+		'title' => t('You have been banned'),
+		'description' => t('Remove Pepper Address from everban Banlist'),
+		'page callback' => 'everban_banned_page',
+		'type' => MENU_CALLBACK,
+		'access arguments' => array('access content'),
+	);
+	///// BAN PEPPER
+	$items['admin/user/everban/ban/%'] = array(
+		'title' => t('Unban Pepper Address'),
+		'description' => t('Ban Pepper - Cookie value on user(s) host'),
+		'page callback' => 'everban_ban',
+		'page arguments' => array(4),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('ban by Pepper'),
+	);
+	///// UNBAN PEPPER
+	$items['admin/user/everban/unban/%'] = array(
+		'title' => t('Unban Pepper Address'),
+		'description' => t('Unban Pepper'),
+		'page callback' => 'everban_unban',
+		'page arguments' => array(4),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('unban by Pepper'),
+	);
+	///// TRAP UID
+	$items['admin/user/everban/trap/uid/%'] = array(
+		'title' => t('Trap UID'),
+		'description' => t('Set Everban Trap by UID'),
+		'page callback' => 'everban_trap_uid',
+		'page arguments' => array(5),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('trap by UID'),
+	);
+	///// UNTRAP UID
+	$items['admin/user/everban/untrap/uid/%'] = array(
+	      'title' => t('Untrap UID'),
+	      'description' => t('Unset Everban Trap by UID'),
+	      'page callback' => 'everban_untrap_uid',
+		'page arguments' => array(5),
+	      'type' => MENU_NORMAL_ITEM,
+	      'access arguments' => array('untrap by UID'),
+	);	
+	///// TRAP IP
+	$items['admin/user/everban/trap/ip/%'] = array(
+		'title' => t('Trap IP'),
+		'description' => t('Set Everban Trap by IP'),
+		'page callback' => 'everban_trap_ip',
+		'page arguments' => array(5),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('trap by IP'),
+	);
+	//// UNTRAP IP
+	$items['admin/user/everban/untrap/ip/%'] = array(
+		'title' => t('Untrap IP'),
+		'description' => t('Unset Everban Trap by IP'),
+		'page callback' => 'everban_untrap_ip',
+		'page arguments' => array(5),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('untrap by IP'),
+	);	
+	
+	return $items;
+}
+
+/**
+ * IMPLEMENTS HOOK_PERM // TODO ;-)
+ */
+function everban_perm() {
+	return array('administer everban', 'ban by Pepper', 'unban by Pepper', 'ban by Trap', 'unban by Trap');
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////// TO WORK WITH VIEWS IMPLEMENTATION ////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+/**************************    BAN & TRAP OPERATIONS    *****************************************/
+
+/*
+* Creates BAN PEPPER page
+*/
+function everban_ban( $pepper ){
+	return drupal_get_form(	'everban_form',							// form call
+							'everban_ban',							// operation name
+							$pepper, 								// pepper value
+							EVB_BAN_OPERATION, 						// operation type
+							EVB_PEPPER_BANNED,						// status to apply
+							'Are you sure you want to ban Pepper');	// confirm message...
+}
+/*
+* Creates UNBAN PEPPER page
+*/
+function everban_unban( $pepper ){
+	return drupal_get_form(	'everban_form',							// form call
+							'everban_unban',						// operation name
+							$pepper, 								// pepper value
+							EVB_BAN_OPERATION, 						// operation type
+							EVB_PEPPER_SANE,						// status to apply
+							'Are you sure you want to unban Pepper');// confirm message...
+}
+/*
+* Creates TRAP UID page
+*/
+function everban_trap_uid( $uid ){
+	return drupal_get_form(	'everban_form',							// form call
+							'everban_trap_uid',						// operation name
+							$uid, 									// value : UID or IP
+							EVB_TRAP_TYPE_UID, 						// operation type
+							EVB_TRAP_ACTIVE,						// status to apply
+							'Are you sure you want to trap UID');	// confirm message...
+}
+/*
+* Creates UNTRAP UID page
+*/
+function everban_untrap_uid( $uid ){
+	return drupal_get_form(	'everban_form',							// form call
+							'everban_untrap_uid',					// operation name
+							$uid, 									// value : UID or IP
+							EVB_TRAP_TYPE_UID, 						// operation type
+							EVB_TRAP_SLEEP,							// status to apply
+							'Are you sure you want to untrap UID');	// confirm message...
+}
+/*
+* Creates TRAP IP page
+*/
+function everban_trap_ip( $ip ){
+	return drupal_get_form(	'everban_form',							// form call
+							'everban_trap_ip', 						// operation name
+							$ip, 									// value : UID or IP
+							EVB_TRAP_TYPE_IP, 						// operation type
+							EVB_TRAP_ACTIVE,						// status to apply
+							'Are you sure you want to trap IP');	// confirm message...
+}
+/*
+* Creates UNTRAP IP page
+*/
+function everban_untrap_ip( $ip ) {
+	return drupal_get_form(	'everban_form',							// form call
+							'everban_untrap_ip', 					// operation name
+							$ip, 									// value : UID or IP
+							EVB_TRAP_TYPE_IP, 						// operation type
+							EVB_TRAP_SLEEP, 						// status to apply
+							'Are you sure you want to untrap IP');	// confirm message...
+}
+
+/*********************** generic DB UPDATE & CONFIRM FORM functions ******************************/
+
+/**
+* Creates form for everban update status operations
+*/
+function everban_form( &$form_state, $operation, $value, $type, $status, $message) {
+	$form['value']=		array( '#type' => 'hidden', '#value' => $value 		);
+	$form['operation']= array( '#type' => 'hidden', '#value' => $operation	);
+	$form['type']= 		array( '#type' => 'hidden', '#value' => $type		);
+	$form['status']= 	array( '#type' => 'hidden', '#value' => $status		);	
+	
+	return confirm_form(
+					$form,
+					t( $message.' @value ?', array('@value' => $value) ),
+					!empty($_GET['destination']) ? $_GET['destination'] : $_SERVER['HTTP_REFERER'],
+					t( '' ),
+					t( 'Yes, Confirm' ),
+					t( 'No, Cancel' ) 	);
+}
+/**
+ * Handles form submission
+ */
+function everban_form_submit( $form, &$form_state ) {
+   $value = 	$form_state['values']['value'];
+   $operation =	$form_state['values']['operation'];
+   $type = 		$form_state['values']['type'];
+   $status = 	$form_state['values']['status'];
+
+   // QUERY on table everban or everban_traps ( $type==0 for ban/unban )
+   $success = $type==EVB_BAN_OPERATION ? everban_update_pepper_status( $value, $status ) : everban_update_trap_status( $value, $type, $status );
+   // LOG
+   everban_watchdogigi( $operation, $success, $value );
+   // REDIRECT
+   $form_state['redirect'] = 'everban';
+}
+/**
+* PEPPER DATABASE QUERY  **** << also called in everban_check_for_trap() >>
+*/
+function everban_update_pepper_status($pepper, $status=EVB_PEPPER_BANNED) {
+   return db_query( "UPDATE {everban} SET status=%d WHERE pepper='%s' " , 
+					$status, $pepper );
+}
+/**
+* TRAP DATABASE QUERY  ****
+*/
+function everban_update_trap_status($trap, $type, $status=EVB_TRAP_ACTIVE) {
+   return db_query( "REPLACE INTO {everban_traps} (trap, type, status) VALUES ('%s',%d,%d) " , 
+					$trap, $type, $status);
+}
+/**
+ * Watchdog for DB status update
+ */
+function everban_watchdogigi( $operation, $success, $value ){
+   if ( $success ) {
+      $msg = $operation . ' : ' . $value;
+      $vars = array('%value' => $value);
+      watchdog($operation, $msg, $vars, WATCHDOG_INFO);
+      drupal_set_message( t($msg) );
+   }else{
+      $msg = $operation . ' failed for : ' . $value;
+      $vars = array();
+      watchdog($operation, $msg, $vars, WATCHDOG_ERROR);
+      drupal_set_message( t($msg) );
+   }
+}
+
+
+
+/**********************************************************************************************
+ * Implementation of hook_views_api().
+ * This tells drupal that there is Views integration file named everban.views.inc 
+ */
+function everban_views_api() {
+  // For 'path' in this array : views.inc file stored in a different location.
+  return array(
+    'api' => 2.0,
+    'path' => drupal_get_path('module', 'everban') . '/views',
+  );
+}
+

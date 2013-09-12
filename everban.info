@@ -1,0 +1,6 @@
+name = EverBan
+description = Allows ban/redirects based on strong cookies
+package = "Other"
+project = "everban"
+core = 6.x
+

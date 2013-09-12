@@ -1,0 +1,63 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Installation file for EverBan module.
+ */
+
+function everban_install() {
+  drupal_install_schema('everban');
+  drupal_install_schema('everban_traps');
+}
+
+function everban_uninstall() {
+  drupal_uninstall_schema('everban');
+  drupal_uninstall_schema('everban_traps');
+  
+  db_query("DELETE FROM {variable} WHERE name LIKE 'everban_%'");
+}
+
+function everban_schema() {
+  $schema['everban'] = array(
+    'fields' => array(
+      'pepper' => array('type' => 'varchar', 'length' => '32', 'not null' => TRUE, 'default' => '', 'description' => 'The strong cookie content'),
+      'uid' => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'description' => 'User ID linked to that pepper'),
+      'status' => array('type' => 'int', 'size'=>'tiny', 'unsigned' => TRUE, 'not null' => TRUE, 'description' => 'Ban status'),
+    ),
+    'primary key' => array('uid', 'pepper'),
+    'indexes' => array( 
+        'uid' => array('uid'),
+        'banned' => array('pepper', 'status'),
+        'pepper' => array('pepper'),
+        'status' => array('status'),
+    )
+  );
+  
+  $schema['everban_traps'] = array(
+        'fields' => array(
+              'trap' => array('type' => 'varchar', 'length' => '32', 'not null' => TRUE, 'default' => '', 'description' => 'Trap setup to auto add peppers'),
+              'type' => array('type' => 'int', 'size'=>'tiny', 'unsigned' => TRUE, 'not null' => TRUE, 'description' => 'Trap type'),
+              'status' => array('type' => 'int', 'size'=>'tiny', 'unsigned' => TRUE, 'not null' => TRUE, 'description' => 'Trap status'),
+        ),
+        'primary key' => array('trap', 'type'),
+        'indexes' => array(
+              'status' => array('status'),
+        )
+  );
+  
+  return $schema;
+}
+
+function everban_update_6100() { 
+   $ret = array();
+   $schema = everban_schema();
+    
+   foreach($schema as $table => $data)
+      if (!db_table_exists($table)) {
+      db_create_table($ret, $table, $data);
+   }
+    
+   return $ret;
+}
+
