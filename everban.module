@@ -153,12 +153,12 @@ function everban_check_for_trap( $user = null )
       global $user;
    }
    
-   $cache = array('ips'=>array(), 'uids'=>array());
    $banned = EVB_PEPPER_SANE ; // Default value (not banned)
     
     // GESTION DU CACHE
-   if ( !extension_loaded('apc') || !( ($cache = apc_fetch( _everban_id().'_traps')) && !empty($cache) ) ) 
+   if ( !extension_loaded('apc') || !( ($cache = apc_fetch( _everban_id().'_traps')) !== FALSE && !empty($cache) && is_array($cache['ips']) && is_array($cache['uids'])   ) ) 
    {
+       $cache = array('ips'=>array(), 'uids'=>array());
        $get_multiples = db_query("SELECT * FROM {everban_traps} WHERE status=1;");
        if ($get_multiples) {
           while ($row = db_fetch_array($get_multiples)) {
@@ -179,7 +179,7 @@ function everban_check_for_trap( $user = null )
     }
 
     // BAN ALGORITHM
-	if ( is_array($cache['ips']) && in_array( $_SERVER['REMOTE_ADDR'], $cache['ips'] ) ) { 	if(DEBUG) { dpm($cache, $name = '$cache'); dpm(array_values( $cache['u']), $name = 'array_values( $cache[u])');} //dsm(array_values( $cache['u']));
+	if ( in_array( $_SERVER['REMOTE_ADDR'], $cache['ips'] ) ) { 	if(DEBUG) { dpm($cache, $name = '$cache'); dpm(array_values( $cache['u']), $name = 'array_values( $cache[u])');} //dsm(array_values( $cache['u']));
 		$banned = EVB_PEPPER_BANNED;
 	}
 
