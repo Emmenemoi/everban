@@ -132,7 +132,19 @@ function everban_views_data()  {
       'handler' => 'views_handler_sort',
      ),
   );
-
+  // NBLOG : aditional field showing IP AGREGATION COUNT
+  $data['everban_traps']['nblog'] = array(
+    'title' => t('Number of logs'),
+    'help' => t('Number of logs'),
+    'field' => array(
+      'handler' => 'views_handler_field_numeric',
+      'click sortable' => TRUE,
+     ),
+     'sort' => array(
+      'handler' => 'views_handler_sort',
+     ),
+  );
+  
   return $data;
 }
 
@@ -190,7 +202,7 @@ function everban_views_handlers() {
 ///////////////// USER_IPS QUERY : GROUP BY IP /////////////
 ////////////////////////////////////////////////////////////
 
-// INITIAL QUERY TO ALTER :
+// INITIAL QUERY TO ALTER (example with UID=1):
 /*
  SELECT 
    accesslog.aid AS aid,
@@ -201,10 +213,11 @@ function everban_views_handlers() {
  LEFT JOIN everban_traps everban_traps ON accesslog.hostname = everban_traps.trap AND everban_traps.type = '1'
  WHERE users_accesslog.uid = 1 
 */
-// RESULTING QUERY "GROUP BY IP" (WITHOUT COUNT) :
+// RESULTING QUERY "GROUP BY IP" AND COUNT) :
 /*
- SELECT 
+SELECT 
    accesslog.aid AS aid,
+   COUNT(accesslog.hostname) AS everban_traps_nblog,
    accesslog.hostname AS accesslog_hostname,
    everban_traps.status AS everban_traps_status
  FROM accesslog accesslog 
@@ -222,9 +235,9 @@ function everban_views_handlers() {
 */
 function everban_views_query_alter(&$view, &$query) 
 {
-  if ($view->name == 'user_ips') { 						//dpm('coucou_1');
-    if ($view->current_display == 'attachment_1') { 	//dpm('coucou_2');
-														//dpm($query);
+  if ($view->name == 'user_ips') { 						
+    if ($view->current_display == 'attachment_1') { 	//dpm($query);
+
       // Tell the query constructor these fields must be used with the GROUP BY clause
       // $query->add_groupby('field1');
       $query->add_groupby('accesslog.hostname');
@@ -235,13 +248,14 @@ function everban_views_query_alter(&$view, &$query)
       $query->fields['aid']['aggregate'] = TRUE;
       $query->fields['everban_traps_status']['aggregate'] = TRUE;
       $query->fields['accesslog_hostname']['aggregate'] = TRUE;
-      // ... all but the grouped and aggregated fieldaliases must have this.
-
+      $query->fields['everban_traps_nblog']['aggregate'] = TRUE;
+	  // ... all but the grouped and aggregated fieldaliases must have this.
+	
       // Configure the fields that perform the aggregation (SUM, AVG, etc)
       // $query->fields['aggregatedfieldaliasA']['table'] = '';
-      //$query->fields['accesslog_nb']['table'] = '';
+      $query->fields['everban_traps_nblog']['table'] = '';
       // $query->fields['aggregatedfieldaliasA']['field'] = "SUM(fieldA)";
-      //$query->fields['accesslog_nb']['field'] = "COUNT(accesslog.hostname)";
+      $query->fields['everban_traps_nblog']['field'] = "COUNT(accesslog.hostname)";
     }
   }
 }

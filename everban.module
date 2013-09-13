@@ -1,20 +1,22 @@
 <?php
+// $Id: everban.module v1.2 $
 
-/* v6.0
+/* v6.1
 *
 * Handles "peppers" (strong random cookies) using JavaScript 
 * and "trap" (by IP or UID) mecanisms to prevent from undesirable. 
 *
 * Clients identified as baned will be redirected to banpage
 *
-* Need of Views 2 : implements administration interface
+* Need of Views 2 and Views CustomField : implements administration interface
+* Need of jQuery Update
 *
 * Copyright 2013, Sebastien Fuchs, Alexandre Mourousy
 * Emmene-moi SARL // http://www.emmene-moi.fr
 *
 * JS Inspired by Samy Kamkar evercookie's works
 *
-* */
+**/
 
 define('EVB_PEPPER_SANE',	0);
 define('EVB_PEPPER_BANNED',	1);
@@ -29,10 +31,6 @@ define('DEBUG', 		false);
 define('JS_DEBUG', 		false);
 define('DEBUG_CACHE', 	false); 
 
-
-/* 	TODO : check _everban_id() pour fonctionnement extension cache APC
-	Note : JS makes cookie 'EVP' from everPNG client caching
-*/
 
 /*******************************************************************************************************************
  * IMPLEMENTS HOOK_INIT
@@ -78,23 +76,24 @@ function everban_init() {
 function everban_add_javascript($pepper_cookie_name, $pepper )
 {
 	global $base_url;
-	$path = drupal_get_path('module', 'everban');
+	$js_path = drupal_get_path('module', 'everban').'/js/';
 	drupal_add_js( 	array( 'everban' => array('id' =>    	$pepper_cookie_name, 
 											 'pepper'=> 	$pepper, 
-											 'base_path'=>  base_path().$path.'/', 	 	// for PNG Canvas loading
-											 'base_url' =>	$base_url.'/'.$path.'/',	// for SwfStore init
-											 'js_debug' => 	JS_DEBUG)
+											 'base_path'=>  base_path().$js_path, 	// for PNG Canvas loading
+											 'base_url' =>	$base_url.'/'.$js_path,	// for SwfStore init
+											 'js_debug' => 	JS_DEBUG )
 					), 
 					'setting'
 	);
-	drupal_add_js($path.'/jquery.everpng.js',		'module'); // PNG generation with forced cache and html5 canvas pixel reading
-	drupal_add_js($path.'/swfstore.js',				'module'); // Library for flash cookies
-	drupal_add_js($path.'/jquery.swfstore.js',		'module'); // Local Share Object - Flash storage
-	drupal_add_js($path.'/jquery.windowapi.js',		'module'); // Window.name Caching
-	drupal_add_js($path.'/jquery.cookie.js',		'module'); // Cookies API (need for storageapi)
-	drupal_add_js($path.'/jquery.storageapi.js', 	'module'); // Local and Session storage
-	drupal_add_js($path.'/jquery.everban.5.js', 	'module'); // API INTERFACE : jQuery plugin
-	drupal_add_js($path.'/everban.5.js', 			'module'); // MAIN ALGORITHM
+	// Note : everpng makes aditional cookie 'EVP' from everPNG client caching
+	drupal_add_js($js_path.'jquery.everpng.min.js',		'module'); // PNG generation with forced cache and html5 canvas pixel reading
+	drupal_add_js($js_path.'swfstore.min.js',			'module'); // Library for flash cookies
+	drupal_add_js($js_path.'jquery.swfstore.min.js',	'module'); // Local Share Object - Flash storage
+	drupal_add_js($js_path.'jquery.windowapi.min.js',	'module'); // Window.name Caching
+	drupal_add_js($js_path.'jquery.cookie.min.js',		'module'); // Cookies API (need for storageapi)
+	drupal_add_js($js_path.'jquery.storageapi.min.js', 	'module'); // Local and Session storage
+	drupal_add_js($js_path.'jquery.everban.min.js', 	'module'); // API INTERFACE : jQuery plugin
+	drupal_add_js($js_path.'everban.min.js', 			'module'); // MAIN ALGORITHM
 }
 
 
@@ -246,36 +245,12 @@ function _everban_rand_string(
 /***********************************************************************************************/
 function _everban_id() {
     global $cookie_domain;
-	return str_replace('.','_','EVB'.$cookie_domain);
-	//return variable_get( 'everban_id', str_replace('.','_','EVB'.$cookie_domain) );
-	//return variable_get( 'everban_id', 'EVB' );
+	return variable_get( 'everban_id', str_replace('.','_','EVB'.$cookie_domain) );
+	
+	// RETURN VARIANTS DEPENDING ON CONFIGURATIONS
+		//return variable_get( 'everban_id', 'EVB' ); ==> this one and above lets drupal settings choose for cookie name
+		//return str_replace('.','_','EVB'.$cookie_domain);
 }
-///////////////////////////////  OLD but...	//////////////////////////////////////////////////
-/**
- * Implements hook_settings()
-
-function everban_settings() {
-	$form = array();
-	$form['everban_dest'] = array(
-		'#prefix' => t('Enter a destination for miscreants. If using a remote address, the full URL (including http://) must be used.	For a local page, use the Drupal path beginning with a slash.'),
-		'#type' => 'textfield',
-		'#title' => t('Redirect Destination'),
-		'#default_value' => variable_get('everban_dest', 'everban/banned'),
-		'#size' => '60',
-	);
-
-	$form['everban_id'] = array(
-		'#prefix' => t('Enter an id for the armored cookie.'),
-		'#type' => 'textfield',
-		'#title' => t('Armored cookie ID'),
-		'#default_value' => _everban_id(),
-		'#size' => '60',
-	);
-
-	return system_settings_form($form);
-}
- */
-
 
 /** ************************************************************************************* **/
 /** **************************       EVERBAN DB ADMIN           ************************* **/
@@ -287,6 +262,15 @@ function everban_settings() {
  */
 function everban_menu() {
 	$items = array();
+	// ADMIN FORM in drupal configuration : Redirect Destination and Pepper Cookie name
+	$items['admin/settings/everban'] = array(
+		'title' => t('Everban'),
+		'description' => t('Pepper Cookie name settings and Redirect Destination'),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('everban_settings'),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('administer everban'),
+	);
 	// BAN PAGE
 	$items['everban/banned'] = array(
 		'title' => t('You have been banned'),
@@ -353,12 +337,36 @@ function everban_menu() {
 	return $items;
 }
 
-/**
+/*********************************************************************************************
  * IMPLEMENTS HOOK_PERM // TODO ;-)
  */
 function everban_perm() {
 	return array('administer everban', 'ban by Pepper', 'unban by Pepper', 'ban by Trap', 'unban by Trap');
 }
+/*********************************************************************************************
+ * IMPLEMENTS HOOK_SETTINGS()
+ */
+function everban_settings() {
+	$form = array();
+	$form['everban_dest'] = array(
+		'#prefix' => t('Enter a destination for miscreants. If using a remote address, the full URL (including http://) must be used.	For a local page, use the Drupal path beginning with a slash.'),
+		'#type' => 'textfield',
+		'#title' => t('Redirect Destination'),
+		'#default_value' => variable_get('everban_dest', 'everban/banned'),
+		'#size' => '60',
+	);
+
+	$form['everban_id'] = array(
+		'#prefix' => t('Enter the Pepper Cookie Name for Everban'),
+		'#type' => 'textfield',
+		'#title' => t('Pepper Cookie Name'),
+		'#default_value' => _everban_id(),
+		'#size' => '60',
+	);
+
+	return system_settings_form($form);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////// TO WORK WITH VIEWS IMPLEMENTATION ////////////////////////////////////
@@ -467,7 +475,7 @@ function everban_form_submit( $form, &$form_state ) {
    // LOG
    everban_watchdogigi( $operation, $success, $value );
    // REDIRECT
-   $form_state['redirect'] = 'everban';
+   $form_state['redirect'] = 'admin/user/everban';
 }
 /**
 * PEPPER DATABASE QUERY  **** << also called in everban_check_for_trap() >>

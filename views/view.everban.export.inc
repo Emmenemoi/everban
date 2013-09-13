@@ -628,7 +628,7 @@ $handler->override_option('path', 'admin/user/everban');
 $handler->override_option('menu', array(
   'type' => 'normal',
   'title' => 'Everban View',
-  'description' => 'Everban View',
+  'description' => 'Watch Peppers/IPs by UID & Work on BAN/TRAP status',
   'weight' => '0',
   'name' => 'navigation',
 ));

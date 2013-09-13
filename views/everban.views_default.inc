@@ -15,7 +15,7 @@ function everban_views_default_views() {
 	 // INCLUDE THEM HERE
 	 foreach ($files as $filepath => $file) 
 	 {
-	   include $filepath;
+	   require_once $filepath;
 
 	   if (isset($view)) 
 	   { 

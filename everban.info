@@ -1,6 +1,12 @@
+; $Id$
 name = EverBan
-description = Allows ban/redirects based on strong cookies
+;description = Allows clients ban & redirections based on "strong" cookies and UID/IP traps
+description = Seriously block unwanted users providing ban on "strong" cookies and UID/IP traps
 package = "Other"
 project = "everban"
 core = 6.x
+dependencies[] = views
+dependencies[] = jquery_update
+dependencies[] = views_customfield
+version = "6.x-1.2"
 
