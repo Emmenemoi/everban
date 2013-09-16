@@ -29,7 +29,7 @@
 				swf_url: swf_url,
 				namespace: 'EVB',
 				debug: debug,
-				timeout: 1, // number of seconds to wait before concluding there was an error
+				timeout: 2, // number of seconds to wait before concluding there was an error
 				onready: function(){ 
 					callback(true); },
 				onerror: function(){

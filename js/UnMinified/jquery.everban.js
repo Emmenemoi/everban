@@ -27,12 +27,13 @@
 			plugins = pluginList;
 
 			// SYNCHRONIZED CALLBACK FOR RESUMING EVERBAN MAIN ALGORITHM
-			var counter=0, callbacks=2;
-			var done = function(){
-				if( ++counter == callbacks ) { callback(true); }
-			};
+			var counter=0, nbCallbacks=2;
+			function done()
+			{
+				if( ++counter == nbCallbacks ) callback(true);
+			}
 			
-			// SWF INITIALISATION
+			// SWF TEST & INIT
 			if ( $.inArray('swfStorage',plugins) != -1 ) // Use of JQuery for IE
 			{
 				if( $.swfStorage ){ 
@@ -45,25 +46,24 @@
 					});
 				}
 			}
-			
-			// PNG INITIALISATION
-			if ( $.inArray('pngStorage',plugins) != -1 ) // Use of JQuery for IE
-			{
-				if( $.pngStorage ){ 
-					$.pngStorage.init( function( value )
-					{
-						done(); // DONE SIGNAL
-					});
+			// COOKIE TEST & INIT
+			if( $.inArray('cookieStorage',plugins) != -1 ){
+				if($.cookie){				
+					$.cookie.defaults = { path: '/' }; // available across entire domain
+					if($.cookieStorage){	
+						$.cookieStorage.setExpires(3650); // valid for 10*365 days
+
+						// PNG TEST & INIT - depends on $.cookie !
+						if ( $.inArray('pngStorage',plugins) != -1 ){ // Use of JQuery for IE
+							if( $.pngStorage ){ 
+								$.pngStorage.init( function( value ){
+									done(); // DONE SIGNAL
+								});
+							}
+						}
+					}
 				}
 			}			
-			
-			// COOKIE CONFIGURATION
-			if( $.inArray('cookieStorage',plugins) != -1 )
-			{
-				if($.cookieStorage)	$.cookieStorage.setExpires(3650); // valid for 10*365 days
-				if($.cookie) 		$.cookie.defaults = { path: '/' }; // available across entire domain
-			}
-			
 		},
 
 		// RETURN ELECTED PEPPER IF FOUND, ELSE NULL ( USING CALLBACK )
@@ -111,7 +111,7 @@
 			}
 		},
 
-		// REMOVE ALL - !!!!!!!!!! TODO TOCHECK
+		// REMOVE ALL - (TOCHECK;)
 		remove : function( key )
 		{
 			var plugin ;
@@ -120,7 +120,7 @@
 			{
 				plugin = plugins[i];
 				try{
-					$[plugin].remove( key ); // !! assume all plugins have method remove() !!
+					$[plugin].remove( key );
 					
 				}catch(e){ if(this.debug) alert( 'REMOVE problem using plugin : ' + plugin + '\n' + e ); }
 			}

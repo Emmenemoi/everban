@@ -1,7 +1,7 @@
 <?php
-// $Id: everban.module v1.2 $
+// $Id: everban.module v1.3 $
 
-/* v6.1
+/* v6.2
 *
 * Handles "peppers" (strong random cookies) using JavaScript 
 * and "trap" (by IP or UID) mecanisms to prevent from undesirable. 
@@ -46,10 +46,10 @@ function everban_init() {
     global $user;	
 	
 	// DEFINE COOKIE PEPPER
-    $pepper_cookie_name = _everban_id(); // ( 'EVB_' . cookie_domain ) 
-    $pepper = $_COOKIE[ $pepper_cookie_name ]; //dpm($pepper_cookie_name); 
+    $pepper_cookie_name = _everban_id();
+    $pepper = $_COOKIE[ $pepper_cookie_name ];
 	// LAUNCH TRAP ALGORITHM (not for admin)
-    if( $user->uid!=1 ) everban_check_for_trap();								if(DEBUG) { dpm($pepper, $name = 'Cookie EVB'); dpm($banned, $name = '$ banned'); dpm($user->uid, $name = '$user->uid');}
+    if( $user->uid!=1 ) everban_check_for_trap();								if(DEBUG) { dpm($pepper, $name = $pepper_cookie_name); dpm($banned, $name = '$ banned'); dpm($user->uid, $name = '$user->uid');}
 	// TEST COOKIE CONSISTANCY
 	$noPepper = empty($pepper) || strlen($pepper) != 32 || strpos($pepper, 'doctype') || preg_match('/\W/', $pepper);
 
@@ -86,12 +86,12 @@ function everban_add_javascript($pepper_cookie_name, $pepper )
 					'setting'
 	);
 	// Note : everpng makes aditional cookie 'EVP' from everPNG client caching
-	drupal_add_js($js_path.'jquery.everpng.min.js',		'module'); // PNG generation with forced cache and html5 canvas pixel reading
 	drupal_add_js($js_path.'swfstore.min.js',			'module'); // Library for flash cookies
 	drupal_add_js($js_path.'jquery.swfstore.min.js',	'module'); // Local Share Object - Flash storage
 	drupal_add_js($js_path.'jquery.windowapi.min.js',	'module'); // Window.name Caching
-	drupal_add_js($js_path.'jquery.cookie.min.js',		'module'); // Cookies API (need for storageapi)
-	drupal_add_js($js_path.'jquery.storageapi.min.js', 	'module'); // Local and Session storage
+	drupal_add_js($js_path.'jquery.cookie.min.js',		'module'); // Cookies API
+	drupal_add_js($js_path.'jquery.storageapi.min.js', 	'module'); // Local and Session storage [depends on 'cookie']
+	drupal_add_js($js_path.'jquery.everpng.min.js',		'module'); // PNG generation with forced cache and html5 canvas pixel reading [depends on Cookies API]
 	drupal_add_js($js_path.'jquery.everban.min.js', 	'module'); // API INTERFACE : jQuery plugin
 	drupal_add_js($js_path.'everban.min.js', 			'module'); // MAIN ALGORITHM
 }
@@ -116,7 +116,7 @@ function everban_check_for_ban( $pepper, $user = null ) {
 	// CHECK IN CACHE
     if( extension_loaded('apc') && ($cache = apc_fetch( _everban_id().'_'.$pepper)) && !empty($cache) ) 
 	{
-        if ( in_array($user->uid, $cache['u'] ) ) {					//dsm(array_values( $cache['u']));
+        if ( in_array($user->uid, $cache['u'] ) ) {					if(DEBUG_CACHE) dsm(array_values( $cache['u']));
             return $cache['b'];
         }
     }
@@ -182,7 +182,7 @@ function everban_check_for_trap( $user = null )
 		$banned = EVB_PEPPER_BANNED;
 	}
 
-	if ( $user->uid>1 && in_array( $user->uid, $cache['uids'] ) ) { //dsm(array_values( $cache['u']));
+	if ( $user->uid>1 && in_array( $user->uid, $cache['uids'] ) ) { if(DEBUG) dsm(array_values( $cache['u']));
 		$banned = EVB_PEPPER_BANNED;
 	}
 
@@ -214,7 +214,7 @@ function everban_get_user_pepper($uid, $real=false){
     $result = db_query("select pepper from {everban} where uid = '%d' LIMIT 1", $uid);
 	while ($data = db_fetch_object($result)) {
 		$pepper = $data->pepper;
-	}    
+	}
     return !isset($pepper) && !$real ? _everban_rand_string(32) : $pepper ;
 }
 /***********************************************************************************************/
@@ -245,11 +245,8 @@ function _everban_rand_string(
 /***********************************************************************************************/
 function _everban_id() {
     global $cookie_domain;
-	return variable_get( 'everban_id', str_replace('.','_','EVB'.$cookie_domain) );
-	
-	// RETURN VARIANTS DEPENDING ON CONFIGURATIONS
-		//return variable_get( 'everban_id', 'EVB' ); ==> this one and above lets drupal settings choose for cookie name
-		//return str_replace('.','_','EVB'.$cookie_domain);
+	return variable_get( 'everban_id', str_replace('.','_','EVB'.$cookie_domain) ); 
+	// Keep the site domain at end of cookie for cache optimisation for several sites on same server
 }
 
 /** ************************************************************************************* **/

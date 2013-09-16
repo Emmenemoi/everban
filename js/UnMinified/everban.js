@@ -16,7 +16,7 @@ jQuery(document).ready(function ()
 			'sessionStorage', 	// Storage API - html5
 			'windowStorage',	// window.name Caching (from S.K.)
 			'swfStorage',	 	// Local Share Object - Flash storage
-			'pngStorage'		// PNG generation with forced cache and html5 canvas pixel reading (from S.K.)
+			'pngStorage'		// PNG generation with forced cache and html5 canvas pixel reading (from S.K.) [depends on cookieStorage]
 		];
 
 	// LOAD PLUGINS	- ALGORITHM ENCAPSULATED IN CALLBACK FUNCTION
