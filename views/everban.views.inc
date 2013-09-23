@@ -92,6 +92,12 @@ function everban_views_data()  {
      'sort' => array(
       'handler' => 'views_handler_sort',
      ),
+    'argument' => array(
+      'handler' => 'views_handler_argument_string',
+    ),
+    'filter' => array(
+      'handler' => 'views_handler_filter_string',
+    ),
   );
     
 
