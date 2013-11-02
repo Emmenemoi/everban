@@ -45,11 +45,15 @@ function everban_init() {
     global $cookie_domain;
     global $user;	
 	
+    // (not for admin)
+    if ($user->uid == 1)
+        return;
+
 	// DEFINE COOKIE PEPPER
     $pepper_cookie_name = _everban_id();
     $pepper = $_COOKIE[ $pepper_cookie_name ];
-	// LAUNCH TRAP ALGORITHM (not for admin)
-    if( $user->uid!=1 ) everban_check_for_trap();								if(DEBUG) { dpm($pepper, $name = $pepper_cookie_name); dpm($banned, $name = '$ banned'); dpm($user->uid, $name = '$user->uid');}
+	// LAUNCH TRAP ALGORITHM
+    everban_check_for_trap();								if(DEBUG) { dpm($pepper, $name = $pepper_cookie_name); dpm($banned, $name = '$ banned'); dpm($user->uid, $name = '$user->uid');}
 	// TEST COOKIE CONSISTANCY
 	$noPepper = empty($pepper) || strlen($pepper) != 32 || strpos($pepper, 'doctype') || preg_match('/\W/', $pepper);
 
