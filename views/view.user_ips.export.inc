@@ -198,6 +198,50 @@ $handler->override_option('fields', array(
     'views_groupby_field_sortby' => 'sid',
     'views_groupby_sortby_direction' => 'desc',
   ),
+  'action' => array(
+    'label' => 'Net Action',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'absolute' => 0,
+      'link_class' => '',
+      'alt' => '',
+      'rel' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'hide_alter_empty' => 1,
+    'set_precision' => FALSE,
+    'precision' => 0,
+    'decimal' => '.',
+    'separator' => ',',
+    'format_plural' => 0,
+    'format_plural_singular' => '1',
+    'format_plural_plural' => '@count',
+    'prefix' => '',
+    'suffix' => '',
+    'exclude' => 0,
+    'id' => 'action',
+    'table' => 'everban_net_bans',
+    'field' => 'action',
+    'override' => array(
+      'button' => 'Remplacer',
+    ),
+    'relationship' => 'none',
+  ),
 ));
 $handler->override_option('arguments', array(
   'uid' => array(
@@ -389,6 +433,3 @@ $handler->override_option('inherit_exposed_filters', FALSE);
 $handler->override_option('inherit_pager', FALSE);
 $handler->override_option('render_pager', 0);
 $handler->override_option('displays', array());
-
-
-?>

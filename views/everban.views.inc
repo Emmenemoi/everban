@@ -1,5 +1,7 @@
 <?php
 
+module_load_include('inc', 'everban', 'views/everban_handler_join_ip');
+
 /**
  * This file is used to tell the views module about the everban table.
  *
@@ -151,6 +153,61 @@ function everban_views_data()  {
      ),
   );
   
+
+    ///////////////////////////
+  ////// NETS DATA  /////////
+  ///////////////////////////
+  $data['everban_net_bans']['table']['group']  = t('Everban net bans');
+  
+    // Advertise this table as a possible base table
+  $data['everban_net_bans']['table']['base'] = array(
+    'field' => 'ip',
+    'title' => t('Everban network black/white lists'),
+    'weight' => 10,
+  );
+
+  // Advertise everban_traps table joins the 'users' base table, nodes and accesslog
+  $data['everban_net_bans']['table']['join'] = array(
+    'accesslog' => array(
+      'left_field' => 'hostname',
+      'field' => 'ip',
+      'handler' => 'views_join_everban_ip',
+    ),
+  );  
+  // STATUS OF TRAP
+  $data['everban_net_bans']['status'] = array(
+    'title' => t('Status of ban'),
+    'help' => t('Status of ban'),
+    'field' => array(
+      'handler' => 'views_handler_field_numeric',
+      'click sortable' => TRUE,
+     ),
+     'sort' => array(
+      'handler' => 'views_handler_sort',
+     ),
+  );
+  // NBLOG : aditional field showing IP AGREGATION COUNT
+  $data['everban_net_bans']['ip'] = array(
+    'title' => t('IP'),
+    'help' => t('IP of network'),
+    'field' => array(
+      'handler' => 'everban_handler_field_ip',
+      'click sortable' => TRUE,
+     ),
+     'sort' => array(
+      'handler' => 'views_handler_sort',
+     ),
+  );
+    // NBLOG : aditional field showing IP AGREGATION COUNT
+  $data['everban_net_bans']['class'] = array(
+    'title' => t('Class'),
+    'help' => t('Class of network'),
+    'field' => array(
+      'handler' => 'views_handler_field_numeric',
+      'click sortable' => TRUE,
+     ),
+  );
+
   return $data;
 }
 
@@ -182,6 +239,18 @@ function everban_views_data_alter(&$data) {
     ),
   );
 
+  ////////////// BLACKLIST OPERATION HANDLER //////////////////
+  $data['everban_net_bans']['action'] = array(
+    'real field' => 'status',
+    'title' => t('Net Action'),
+    'help' => t('Provide net blacklist action Links'),
+    'field' => array( //'label'...
+      'handler' => 'everban_handler_field_blacklist_operation',     
+    'click sortable' => FALSE,
+      //'status_field' => 'status',
+    ),
+  );
+
 }
 
 //////////////////    INCLUDES PATHS  ////////////////////////
@@ -197,6 +266,12 @@ function everban_views_handlers() {
       ),
       'everban_handler_field_trap_operation' => array(
         'parent' => 'views_handler_field_numeric',
+      ),
+      'everban_handler_field_blacklist_operation' => array(
+        'parent' => 'views_handler_field_numeric',
+      ),
+      'everban_handler_field_ip' => array(
+        'parent' => 'views_handler_field',
       ),
     )
   );

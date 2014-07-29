@@ -26,10 +26,15 @@ define('EVB_TRAP_TYPE_IP', 	1); // ! Constant used in everban.views.inc
 define('EVB_TRAP_TYPE_UID', 2); // ! Constant used in everban.views.inc
 define('EVB_TRAP_SLEEP',	0);
 define('EVB_TRAP_ACTIVE',	1);
+define('EVB_BLACKLIST_BL',	1);
+define('EVB_BLACKLIST_AUTO',0);
+define('EVB_BLACKLIST_WL',	2);
+define('EVB_BLACKLIST_DELETE',	-2);
 
 define('DEBUG', 		false);
 define('JS_DEBUG', 		false);
 define('DEBUG_CACHE', 	false); 
+
 
 
 /*******************************************************************************************************************
@@ -48,6 +53,11 @@ function everban_init() {
     // (not for admin)
     if ($user->uid == 1)
         return;
+
+    if (everban_check_for_proxy() === FALSE) {
+    	everban_goto_banpage();
+    	return;
+    }
 
 	// DEFINE COOKIE PEPPER
     $pepper_cookie_name = _everban_id();
@@ -204,6 +214,44 @@ function everban_check_for_trap( $user = null )
 	return $banned;
 
 }
+
+function everban_check_for_proxy($ip=null) {
+	if ($ip==null) {
+		$ip = $_SERVER['REMOTE_ADDR'];
+	}
+
+	static $accesstoken;
+	if (variable_get('everban_prevent_proxy', 0) === 0 || $ip == '127.0.0.1') {
+		return true;
+	}
+	
+	if ( !isset($accesstoken) ) {
+
+		$cid = "everban-accesstoken-$ip";
+		$cache = cache_get($cid);
+		$accesstoken = is_object($cache) ? $cache->data : bull;
+		if ( !is_numeric($accesstoken) ) {
+			$accesstoken = TRUE;
+			// Maxmind
+			/*$query = "https://minfraud.maxmind.com/app/ipauth_http?l=" . $license_key . "&i=" . $ip;
+			$score = file_get_contents($query);
+			if ($score == 'Y')*/
+			$result = db_query("select ip from {everban_net_bans} where (-1 << 32 - class) & %d = ip AND status <> 2;", ip2long($ip) );
+    		if( db_fetch_object($result) ) {
+    			$accesstoken = FALSE;
+    		}
+
+    		if ( !$accesstoken) {
+    			global $user;
+    			watchdog('everban', '@user is using a proxy and might be blocked', array('@user'=>$user->name));
+    		}
+    		cache_set($cid, $accesstoken, 'cache', time() + 84600); // 24h
+		}
+	}
+
+	return $accesstoken ;
+}
+
 /***********************************************************************************************/
 function everban_goto_banpage() {
     $jumpto = variable_get('everban_dest', 'everban/banned' );
@@ -338,6 +386,31 @@ function everban_menu() {
 		'access arguments' => array('untrap by IP'),
 	);	
 	
+	///// BLACKLIST NET
+	$items['admin/user/everban/blacklist'] = array(
+		'title' => t('Add blacklist'),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('everban_blacklist_form'),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('administer everban'),
+	);
+	///// BLACKLIST NET
+	$items['admin/user/everban/blacklist/ip/%'] = array(
+		'title' => t('Blacklist Network'),
+		'page callback' => 'everban_blacklist_net',
+		'page arguments' => array(5),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('administer everban'),
+	);
+	//// UNBLACKLIST NET
+	$items['admin/user/everban/unblacklist/ip/%'] = array(
+		'title' => t('Unblacklist Network'),
+		'page callback' => 'everban_unblacklist_net',
+		'page arguments' => array(5),
+		'type' => MENU_NORMAL_ITEM,
+		'access arguments' => array('administer everban'),
+	);
+
 	return $items;
 }
 
@@ -366,6 +439,13 @@ function everban_settings() {
 		'#title' => t('Pepper Cookie Name'),
 		'#default_value' => _everban_id(),
 		'#size' => '60',
+	);
+
+	$form['everban_prevent_proxy'] = array(
+		'#prefix' => t('Prevent access from proxies'),
+		'#type' => 'checkbox',
+		'#title' => t('Activate'),
+		'#default_value' => variable_get('everban_prevent_proxy', 0),
 	);
 
 	return system_settings_form($form);
@@ -446,6 +526,27 @@ function everban_untrap_ip( $ip ) {
 							'Are you sure you want to untrap IP');	// confirm message...
 }
 
+/*
+* Creates BLACKLIST net page
+*/
+function everban_blacklist_net( $ip ){
+	return drupal_get_form(	'everban_net_form',							// form call
+							'everban_blacklist_net', 						// operation name
+							$ip, 									// value : UID or IP
+							EVB_BLACKLIST_BL,						// status to apply
+							'Are you sure you want to blacklist NET');	// confirm message...
+}
+/*
+* Creates UNBLACKLIST net page
+*/
+function everban_unblacklist_net( $ip ) {
+	return drupal_get_form(	'everban_net_form',							// form call
+							'everban_unblacklist_net', 					// operation name
+							$ip, 									// value : UID or IP
+							EVB_BLACKLIST_DELETE, 						// status to apply
+							'Are you sure you want to unblacklist NET');	// confirm message...
+}
+
 /*********************** generic DB UPDATE & CONFIRM FORM functions ******************************/
 
 /**
@@ -482,6 +583,97 @@ function everban_form_submit( $form, &$form_state ) {
    // REDIRECT
    $form_state['redirect'] = 'admin/user/everban';
 }
+
+/**
+* Creates form for everban update status operations
+*/
+function everban_net_form( &$form_state, $operation, $value, $status, $message) {
+	$form['value']=		array( '#type' => 'hidden', '#value' => $value 		);
+	$form['operation']= array( '#type' => 'hidden', '#value' => $operation	);
+	$form['status']= 	array( '#type' => 'hidden', '#value' => $status		);	
+
+	$form['netclass'] = array(
+	  '#type' => 'select',
+	  '#title' => t('Net class to apply'),
+	  '#default_value' => 32,
+	  '#options' => array(
+	    8 => 8,
+	    16 => 16,
+	    24 => 24,
+	    28 => 28,
+	    30 => 30,
+	    32 => 32
+	  ),
+	  '#description' => t('8: 255.0.0.0 / 16: 255.255.0.0 / 24: 255.255.255.0 / 32: 255.255.255.255 / !link', array('!link'=>l('calculate','http://www.subnet-calculator.com/cidr.php'))),
+
+	);
+	
+	return confirm_form(
+					$form,
+					t( $message.' @value ?', array('@value' => $value) ),
+					!empty($_GET['destination']) ? $_GET['destination'] : $_SERVER['HTTP_REFERER'],
+					t( '' ),
+					t( 'Yes, Confirm' ),
+					t( 'No, Cancel' ) 	);
+}
+/**
+ * Handles form submission
+ */
+function everban_net_form_submit( $form, &$form_state ) {
+   $value = 	$form_state['values']['value'];
+   $operation =	$form_state['values']['operation'];
+   $netclass = 		$form_state['values']['netclass'];
+   $status = 	$form_state['values']['status'];
+
+   if ($status == EVB_BLACKLIST_DELETE) {
+   		$success = db_query("DELETE FROM {everban_net_bans} WHERE ip=%d AND class=%d", ip2long($value), $netclass);
+   } else {
+   		$success = db_query("REPLACE INTO {everban_net_bans} (ip, class, status) VALUES (%d,%d,%d)", ip2long($value), $netclass, $status);
+   }
+   // LOG
+   everban_watchdogigi( $operation, $success, $value.'/'.$netclass );
+   cache_clear_all("everban-accesstoken-$value", 'cache');
+   // REDIRECT
+   $form_state['redirect'] = 'admin/user/everban';
+}
+
+
+function everban_blacklist_form(&$form_state) {
+	$form['ip'] = array(
+	  '#type' => 'textfield',
+	  '#title' => t('IP to blacklist'),
+	  '#size' => 20,
+	);
+
+	$form['status'] = array(
+	  '#type' => 'select',
+	  '#title' => t('Status'),
+	  '#default_value' => EVB_BLACKLIST_BL,
+	  '#options' => array(
+	    EVB_BLACKLIST_BL => t('blacklist'),
+	    EVB_BLACKLIST_WL => t('whitelist'),
+	    EVB_BLACKLIST_DELETE => t('remove from lists'),
+	  ),
+	);
+
+	$form['submit'] = array(
+	  '#type' => 'submit',
+	  '#value' => t('Next'),
+	 );
+
+	return $form;
+}
+function everban_blacklist_form_submit( $form, $form_state ) {
+	$status = $form_state['values']['status'];
+	$ip = $form_state['values']['ip'];
+
+	if ($status == EVB_BLACKLIST_DELETE) {
+		drupal_goto("admin/user/everban/unblacklist/ip/$ip");
+	} else {
+		drupal_goto("admin/user/everban/blacklist/ip/$ip");
+	}
+}
+
 /**
 * PEPPER DATABASE QUERY  **** << also called in everban_check_for_trap() >>
 */
@@ -528,3 +720,16 @@ function everban_views_api() {
   );
 }
 
+function everban_cronapi($op, $job = NULL) {
+  $items['everban_update_net_ban'] = array(
+    'description' => 'Update banned networks',
+    'rule' => '* * */1 * *', // Every 5 minutes
+    'callback' => 'everban_update_net_ban_list',
+    'file' => 'everban.cron.inc'
+  );
+  return $items;
+}
+
+function everban_flush_caches() {
+	cache_clear_all("everban-accesstoken-*", 'cache', true);
+}

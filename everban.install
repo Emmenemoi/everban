@@ -46,6 +46,18 @@ function everban_schema() {
         )
   );
   
+  $schema['everban_net_bans'] = array(
+      'fields' => array(
+            'ip' => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'description' => 'IP or network banned'),
+            'class' => array('type' => 'int', 'size'=>'tiny', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 32, 'description' => 'Network class. 32 for single IP'),
+            'status' => array('type' => 'int', 'size'=>'tiny', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0, 'description' => '0 => auto blocked, 1=> blacklist, 2=>whitelist'),
+      ),
+      'primary key' => array('ip', 'class'),
+      'indexes' => array(
+            'status' => array('status'),
+      )
+);
+
   return $schema;
 }
 
@@ -61,3 +73,6 @@ function everban_update_6100() {
    return $ret;
 }
 
+function everban_update_6101() { 
+   return everban_update_6100();
+}
