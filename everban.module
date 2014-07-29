@@ -242,8 +242,7 @@ function everban_check_for_proxy($ip=null) {
     		}
 
     		if ( !$accesstoken) {
-    			global $user;
-    			watchdog('everban', '@user is using a proxy and might be blocked', array('@user'=>$user->name));
+    			watchdog('everban', 'Blocked using a proxy at !proxy', array('!proxy'=>$ip));
     		}
     		cache_set($cid, $accesstoken, 'cache', time() + 84600); // 24h
 		}
