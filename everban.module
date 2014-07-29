@@ -596,14 +596,7 @@ function everban_net_form( &$form_state, $operation, $value, $status, $message) 
 	  '#type' => 'select',
 	  '#title' => t('Net class to apply'),
 	  '#default_value' => 32,
-	  '#options' => array(
-	    8 => 8,
-	    16 => 16,
-	    24 => 24,
-	    28 => 28,
-	    30 => 30,
-	    32 => 32
-	  ),
+	  '#options' => range(0,32),
 	  '#description' => t('8: 255.0.0.0 / 16: 255.255.0.0 / 24: 255.255.255.0 / 32: 255.255.255.255 / !link', array('!link'=>l('calculate','http://www.subnet-calculator.com/cidr.php'))),
 
 	);
