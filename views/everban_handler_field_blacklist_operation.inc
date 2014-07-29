@@ -14,7 +14,7 @@ class everban_handler_field_blacklist_operation extends views_handler_field_nume
 		//dpm($this, $name='this');	dpm($values,$name='values');
 		$status = $values->{$this->field_alias}; // = $values->{everban_traps_status}
 
-		// trap IP
+		// from accesslog
 		if ($this->view->base_table == 'accesslog'){
 		
 			$ipalias = 'accesslog_hostname';
@@ -24,7 +24,7 @@ class everban_handler_field_blacklist_operation extends views_handler_field_nume
 		} else {      // base_table == 'users'
 		
 			$ipalias = 'ip'; 
-			$value = ip2long($values->{$ipalias});
+			$value = long2ip($values->{$ipalias});
 		}
 		
 		$action = $status == null ? 'blacklist/ip/' : 'unblacklist/ip/' ;
