@@ -1,6 +1,6 @@
 <?php
 
-class everban_handler_field_blacklist_operation extends views_handler_field_numeric {
+class everban_handler_field_blacklist_operation extends views_handler_field {
 
 /*	function init( &$view, &$options )  {
         parent::init($view, $options);
@@ -9,6 +9,30 @@ class everban_handler_field_blacklist_operation extends views_handler_field_nume
 /*	function query() {
 	}*/
 	
+
+	function option_definition() {
+		$options = parent::option_definition();
+
+		$options['action_type'] = array('default' => 'simple');
+		return $options;
+	}
+
+	function options_form(&$form, &$form_state) {
+		parent::options_form($form, $form_state);
+
+		$form['action_type'] = array(
+		  '#type' => 'select',
+		  '#title' => t('Action type'),
+		  '#default_value' => $this->options['action_type'],
+		  '#options' => array(
+		    'simple' => t('Simple blacklist'),
+		    'complete' => t('All possible choices'),
+		    'view' => t('View whois')
+		  ),
+		);
+
+	}
+
 	function render( $values ) 
 	{
 		//dpm($this, $name='this');	dpm($values,$name='values');
@@ -27,9 +51,13 @@ class everban_handler_field_blacklist_operation extends views_handler_field_nume
 			$value = long2ip($values->{$ipalias});
 		}
 		
-		$action = $status == null ? 'blacklist/ip/' : 'unblacklist/ip/' ;
+		switch($this->options['action_type']) {
+			case 'view': $out = l('whois', "http://whois.domaintools.com/$value", array('attributes'=>array('target'=>'_blank'))); break;
+			default:
+				$action = $status == null ? 'blacklist/ip/' : 'unblacklist/ip/' ;
+				$out = l( substr($action, 0, 9)=='blacklist' ? 'BLACKLIST' : 'free', 'admin/user/everban/'.$action.$value);
+		}
 
-		$out = l( substr($action, 0, 9)=='blacklist' ? 'BLACKLIST' : 'free', 'admin/user/everban/'.$action.$value);
 		return ($out);
 	}
 }

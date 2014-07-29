@@ -268,7 +268,7 @@ function everban_views_handlers() {
         'parent' => 'views_handler_field_numeric',
       ),
       'everban_handler_field_blacklist_operation' => array(
-        'parent' => 'views_handler_field_numeric',
+        'parent' => 'views_handler_field',
       ),
       'everban_handler_field_ip' => array(
         'parent' => 'views_handler_field',

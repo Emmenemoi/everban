@@ -236,7 +236,7 @@ function everban_check_for_proxy($ip=null) {
 			/*$query = "https://minfraud.maxmind.com/app/ipauth_http?l=" . $license_key . "&i=" . $ip;
 			$score = file_get_contents($query);
 			if ($score == 'Y')*/
-			$result = db_query("select ip from {everban_net_bans} where (-1 << 32 - class) & %d = ip AND status <> 2;", ip2long($ip) );
+			$result = db_query("select ip from {everban_net_bans} where (-1 << 32 - class) & %d = ip AND status <> 2 LIMIT 1;", ip2long($ip) );
     		if( db_fetch_object($result) ) {
     			$accesstoken = FALSE;
     		}
