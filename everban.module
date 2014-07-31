@@ -235,7 +235,6 @@ function everban_check_for_proxy($ip=null) {
 		$cid = "everban-accesstoken-$ip";
 		$cache = cache_get($cid);
 		$accesstoken = is_object($cache) ? $cache->data : null;
-		dpm($accesstoken);
 		if ( is_null($accesstoken) || !is_numeric($accesstoken) ) {
 			$accesstoken = TRUE;
 			// Maxmind
@@ -265,7 +264,7 @@ function everban_goto_banpage($reason=null) {
         if (isset($reason)) {
         	$_SESSION['everban']['ban_reason'] = $reason;
     	}
-        drupal_set_message( $msg );
+        //drupal_set_message( $msg );
         drupal_goto( $jumpto );
      }
 }
