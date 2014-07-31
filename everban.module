@@ -55,7 +55,7 @@ function everban_init() {
         return;
 
     if (everban_check_for_proxy() === FALSE) {
-    	everban_goto_banpage();
+    	everban_goto_banpage(t('Connections through proxies are forbidden'));
     	return;
     }
 
@@ -236,7 +236,7 @@ function everban_check_for_proxy($ip=null) {
 			/*$query = "https://minfraud.maxmind.com/app/ipauth_http?l=" . $license_key . "&i=" . $ip;
 			$score = file_get_contents($query);
 			if ($score == 'Y')*/
-			$result = db_query("select ip from {everban_net_bans} where (-1 << 32 - class) & %d = ip AND status <> 2 LIMIT 1;", ip2long($ip) );
+			$result = db_query("select ip from {everban_net_bans} where (-1 << 32 - class) & %d = (-1 << 32 - class) & ip AND status <> 2 LIMIT 1;", ip2long($ip) );
     		if( db_fetch_object($result) ) {
     			$accesstoken = FALSE;
     		}
@@ -269,12 +269,15 @@ function everban_get_user_pepper($uid, $real=false){
     return !isset($pepper) && !$real ? _everban_rand_string(32) : $pepper ;
 }
 /***********************************************************************************************/
-function everban_banned_page() {
+function everban_banned_page($reason=null) {
     $site_email = variable_get('site_mail', '');
     $support = "support".strstr($site_email,'@');
 
     echo "<body style='width:100%;height:100%;background-color:red;'><div style='position:absolute;width:50%; height:200px;margin-left:-25%;margin-top:-100px;top:50%;left:50%;color:white;text-align:center;font-size:2em;'>";
     echo t("You have been banned for legal reasons.<br> Please contact !email if you think there is a mistake.", array('!email'=>$support));
+    if (!is_null($reason)) {
+    	echo t("Ban reason: !reason", array('!reason'=>$reason));
+    }
     echo "</div></body>";
     exit;
 }
@@ -587,14 +590,23 @@ function everban_form_submit( $form, &$form_state ) {
 * Creates form for everban update status operations
 */
 function everban_net_form( &$form_state, $operation, $value, $status, $message) {
-	$form['value']=		array( '#type' => 'hidden', '#value' => $value 		);
 	$form['operation']= array( '#type' => 'hidden', '#value' => $operation	);
 	$form['status']= 	array( '#type' => 'hidden', '#value' => $status		);	
+
+	$form['value']=		array( '#type' => 'textfield', '#default_value' => $value 		);
+
+	$result = db_query("select class from {everban_net_bans} where (-1 << 32 - class) & %d = (-1 << 32 - class) & ip LIMIT 100;", ip2long($value) );
+    if( $data = db_fetch_object($result) ) {
+    	//dpm($data);
+    	$default = $data->class;
+    } else {
+    	$default = 32;
+    }
 
 	$form['netclass'] = array(
 	  '#type' => 'select',
 	  '#title' => t('Net class to apply'),
-	  '#default_value' => 32,
+	  '#default_value' => $default,
 	  '#options' => range(0,32),
 	  '#description' => t('8: 255.0.0.0 / 16: 255.255.0.0 / 24: 255.255.255.0 / 32: 255.255.255.255 / !link', array('!link'=>l('calculate','http://www.subnet-calculator.com/cidr.php'))),
 

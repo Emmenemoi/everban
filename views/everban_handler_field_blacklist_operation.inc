@@ -10,6 +10,16 @@ class everban_handler_field_blacklist_operation extends views_handler_field {
 	}*/
 	
 
+	function init( &$view, &$options )  {
+        parent::init($view, $options);
+
+	    if ( $options['action_type'] != 'view') {
+	    	//dpm($this);
+	      	$this->additional_fields[] = array('table' => $this->table, 'field' => 'class') ;
+	      	$this->additional_fields[] = array('table' => $this->table, 'field' => 'ip') ;
+	    }
+	}
+
 	function option_definition() {
 		$options = parent::option_definition();
 
@@ -27,6 +37,7 @@ class everban_handler_field_blacklist_operation extends views_handler_field {
 		  '#options' => array(
 		    'simple' => t('Simple blacklist'),
 		    'complete' => t('All possible choices'),
+		    'range' => t('Display range'),
 		    'view' => t('View whois')
 		  ),
 		);
@@ -35,9 +46,10 @@ class everban_handler_field_blacklist_operation extends views_handler_field {
 
 	function render( $values ) 
 	{
-		//dpm($this, $name='this');	dpm($values,$name='values');
+		//dpm($this->query, $name='this');	dpm($values,$name='values');	dpm($this,$name='values');
 		$status = $values->{$this->field_alias}; // = $values->{everban_traps_status}
 
+		$netipalias = isset($this->query->fields[$this->table.'_ip']) ? $this->table.'_ip' : 'ip'; 
 		// from accesslog
 		if ($this->view->base_table == 'accesslog'){
 		
@@ -46,15 +58,26 @@ class everban_handler_field_blacklist_operation extends views_handler_field {
 			
 		// trap UID
 		} else {      // base_table == 'users'
-		
-			$ipalias = 'ip'; 
-			$value = long2ip($values->{$ipalias});
+			$value = long2ip($values->{$netipalias});
 		}
-		
+		//dpm($ipalias);
 		switch($this->options['action_type']) {
 			case 'view': $out = l('whois', "http://whois.domaintools.com/$value", array('attributes'=>array('target'=>'_blank'))); break;
+			case 'range': 
+				$ip_count = 1 << (32 - $values->everban_net_bans_class) ;
+				if ($ip_count==1) {
+					$out = "$value"; 
+				} else {
+					$start = -1 << (32 - $values->everban_net_bans_class) & ip2long($value);
+					$start_value = long2ip($start);
+					$end = ($start + $ip_count - 1);
+					$end_value= long2ip($end);
+					$out = "{$start_value} - {$end_value}"; 
+				}
+				break;
 			default:
 				$action = $status == null ? 'blacklist/ip/' : 'unblacklist/ip/' ;
+				$value = $status == null ? $value : long2ip($values->{$netipalias});
 				$out = l( substr($action, 0, 9)=='blacklist' ? 'BLACKLIST' : 'free', 'admin/user/everban/'.$action.$value);
 		}
 
