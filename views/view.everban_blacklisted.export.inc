@@ -262,6 +262,8 @@ $handler->override_option('access', array(
 $handler->override_option('cache', array(
   'type' => 'none',
 ));
+$handler->override_option('items_per_page', 50);
+$handler->override_option('use_pager', '1');
 $handler->override_option('style_plugin', 'table');
 $handler->override_option('style_options', array(
   'grouping' => '',
@@ -318,3 +320,4 @@ $handler->override_option('tab_options', array(
   'weight' => 0,
   'name' => 'navigation',
 ));
+
