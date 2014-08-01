@@ -49,7 +49,7 @@ function everban_init() {
 
     // avoid check on ban page
     $banpage = variable_get('everban_dest', 'everban/banned' );
-    if ( $_SERVER['REDIRECT_URL'] == $banpage && drupal_get_path_alias(check_plain($_GET['q'])) == $banpage) {
+    if ( drupal_get_path_alias(check_plain($_GET['q'])) == $banpage) {
     	return;
     }
     global $cookie_domain;
