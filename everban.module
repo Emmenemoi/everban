@@ -601,7 +601,7 @@ function everban_net_form( &$form_state, $operation, $value, $status, $message) 
 	$form['operation']= array( '#type' => 'hidden', '#value' => $operation	);
 	$form['status']= 	array( '#type' => 'hidden', '#value' => $status		);	
 
-	$form['value']=		array( '#type' => 'textfield', '#default_value' => $value 		);
+	$form['value']=		array( '#type' => 'textfield', '#default_value' => $value, '#suffix'=>"<span id='net-range'></span>" 		);
 
 	$result = db_query("select class from {everban_net_bans} where (-1 << 32 - class) & %d = (-1 << 32 - class) & ip LIMIT 100;", ip2long($value) );
     if( $data = db_fetch_object($result) ) {
@@ -617,9 +617,10 @@ function everban_net_form( &$form_state, $operation, $value, $status, $message) 
 	  '#default_value' => $default,
 	  '#options' => range(0,32),
 	  '#description' => t('8: 255.0.0.0 / 16: 255.255.0.0 / 24: 255.255.255.0 / 32: 255.255.255.255 / !link', array('!link'=>l('calculate','http://www.subnet-calculator.com/cidr.php'))),
-
 	);
 	
+	drupal_add_js( drupal_get_path('module', 'everban').'/js/admin.js' , 'module');
+
 	return confirm_form(
 					$form,
 					t( $message.' @value ?', array('@value' => $value) ),
