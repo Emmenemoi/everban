@@ -237,6 +237,14 @@ function everban_check_for_proxy($ip=null) {
 		$accesstoken = is_object($cache) ? $cache->data : null;
 		if ( is_null($accesstoken) || !is_numeric($accesstoken) ) {
 			$accesstoken = TRUE;
+			// Tor check
+			// https://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=$_SERVER['SERVER_ADDR']&port=80
+			// $ip in list ?
+			
+			// ipintel:
+			// http://check.getipintel.net/check.php?ip=$ip&contact=AValidEmailAddress&format=json&flags=m
+			// http://check.getipintel.net/check.php?ip=$ip&contact=YourEmailAddressHere
+			
 			// Maxmind
 			/*$query = "https://minfraud.maxmind.com/app/ipauth_http?l=" . $license_key . "&i=" . $ip;
 			$score = file_get_contents($query);
@@ -458,6 +466,13 @@ function everban_settings() {
 		'#default_value' => variable_get('everban_prevent_proxy', 0),
 	);
 
+	$form['everban_maxmind_license'] = array(
+		'#type' => 'textfield',
+		'#title' =>  t('Enter your Maxmind license key for proxy check'),
+		'#default_value' => variable_get('everban_maxmind_license', ''),
+		'#size' => '60',
+	);
+		
 	return system_settings_form($form);
 }
 
@@ -619,6 +634,18 @@ function everban_net_form( &$form_state, $operation, $value, $status, $message) 
 	  '#description' => t('8: 255.0.0.0 / 16: 255.255.0.0 / 24: 255.255.255.0 / 32: 255.255.255.255 / !link', array('!link'=>l('calculate','http://www.subnet-calculator.com/cidr.php'))),
 	);
 	
+	$site_email = variable_get('site_mail', '');
+	$form['ipintel'] = array(
+			'#type' => 'markup',
+			'#value' => t('Check using ipintel: !link', array('!link'=>l('check','http://check.getipintel.net/check.php?ip='.$value.'&contact='.$site_email.'&format=json&flags=f'))).'<br/><br/>',
+	);
+
+	$license_key = variable_get('everban_maxmind_license', '');
+	$form['maxmind'] = array(
+			'#type' => 'markup',
+			'#value' => t('Check using maxmind: !link', array('!link'=>l('check','https://minfraud.maxmind.com/app/ipauth_http?i='.$value.'&l='.$license_key))).'<br/><br/>',
+	);
+		
 	drupal_add_js( drupal_get_path('module', 'everban').'/js/admin.js' , 'module');
 
 	return confirm_form(
