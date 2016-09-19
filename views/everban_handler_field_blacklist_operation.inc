@@ -62,7 +62,7 @@ class everban_handler_field_blacklist_operation extends views_handler_field {
 		}
 		//dpm($ipalias);
 		switch($this->options['action_type']) {
-			case 'view': $out = l('whois', "http://whois.domaintools.com/$value", array('attributes'=>array('target'=>'_blank'))); break;
+			case 'view': $out = l('whois', "https://www.ultratools.com/tools/ipWhoisLookupResult?ipAddress=$value", array('attributes'=>array('target'=>'_blank'))); break;
 			case 'range': 
 				$ip_count = 1 << (32 - $values->everban_net_bans_class) ;
 				if ($ip_count==1) {
